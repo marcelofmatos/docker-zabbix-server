@@ -1,0 +1,216 @@
+# https://github.com/joosequezada/Zabbix-Docker-Swarm
+
+version: "3.8"
+services:
+
+ database:
+  image: mariadb:10.10
+  #entrypoint: bash
+  #command: tailf -f /etc/hosts
+  #user: root
+  #command: [mysqld, --character-set-server=utf8, --collation-server=utf8_bin, --default-authentication-plugin=mysql_native_password]
+  volumes:
+   - zabbix-mariadb-data:/var/lib/mysql:rw
+   - zabbix-mariadb-entrypoint:/docker-entrypoint-initdb.d
+  environment:
+    MYSQL_USER: zabbix
+    MYSQL_DATABASE: zabbix
+    MYSQL_PASSWORD: KD8cCgmKlcVU
+    MYSQL_ROOT_PASSWORD: 1c0snCVTRTDs
+  #user: root
+  #stop_grace_period: 1m
+  networks:
+   - default
+  deploy:
+   #update_config:
+    #failure_action: rollback
+    replicas: 1
+    placement:
+      constraints:
+        - 'node.hostname == ligeroorg-worker-1'
+
+ zabbix-web-nginx-mysql:
+  image: zabbix/zabbix-web-nginx-mysql:alpine-latest
+  #ports:
+  #- "80:80"
+  #- "443:443"
+  volumes:
+   - zabbix_nginx:/etc/ssl/nginx:ro
+  environment:
+    ZBX_SERVER_NAME: "Zabbix Docker"
+    ZBX_SERVER_HOST: zabbix-server
+    ZBX_SERVER_PORT: 10051
+    DB_SERVER_HOST: database
+    MYSQL_USER: zabbix
+    MYSQL_DATABASE: zabbix
+    MYSQL_PASSWORD: KD8cCgmKlcVU
+    #ZBX_HISTORYSTORAGEURL: http://elasticsearch:9200/
+    #ZBX_HISTORYSTORAGETYPES: ['uint', 'dbl', 'str', 'text', 'log'] # Available since 3.4.5
+    #ZBX_MAXEXECUTIONTIME: 600
+    #ZBX_MEMORYLIMIT: 128M
+    #ZBX_POSTMAXSIZE: 16M
+    #ZBX_UPLOADMAXFILESIZE: 2M
+    #ZBX_MAXINPUTTIME: 300
+    #ZBX_SESSION_NAME: zbx_sessionid
+    TZ: America/Sao_Paulo
+    PHP_TZ: America/Sao_Paulo
+  user: root
+  #healthcheck:
+  # test: ["CMD", "curl", "-f", "http://localhost"]
+  # interval: 10s
+  # timeout: 5s
+  # retries: 3
+  # start_period: 30s
+  networks:
+   - default
+   - zabbix_network
+   - web
+  stop_grace_period: 10s
+  deploy:
+   update_config:
+    failure_action: rollback
+   replicas: 2
+   placement:
+    constraints:
+     - 'node.role == worker'
+   labels:
+        - traefik.enable=true
+        - traefik.port=8080
+        - traefik.default.frontend.rule=Host:${WEBSERVER_HOSTS}
+        - traefik.protocol=http
+        - traefik.docker.network=web
+        - traefik.frontend.headers.customResponseHeaders=access-control-allow-origin:*
+  labels:
+   com.zabbix.description: "Zabbix frontend on Nginx web-server with MySQL database support"
+   com.zabbix.company: "Zabbix SIA"
+   com.zabbix.component: "zabbix-frontend"
+   com.zabbix.webserver: "nginx"
+   com.zabbix.dbtype: "mysql"
+   com.zabbix.os: "alpine"
+
+ zabbix-server:
+  image: zabbix/zabbix-server-mysql:alpine-latest
+  ports:
+  # - "10051:10051"
+   - target: 10051
+     published: 10061
+     protocol: tcp
+     mode: host
+  volumes:
+   - zabbix_alertscripts:/usr/lib/zabbix/alertscripts:ro
+   - zabbix_externalscripts:/usr/lib/zabbix/externalscripts:ro
+   - zabbix_modules:/var/lib/zabbix/modules:ro
+   - zabbix_enc:/var/lib/zabbix/enc:ro
+   - zabbix_ssh_keys:/var/lib/zabbix/ssh_keys:ro
+   - zabbix_mibs:/var/lib/zabbix/mibs:ro
+   - snmptraps:/var/lib/zabbix/snmptraps:ro
+  environment:
+    DB_SERVER_HOST: database
+    MYSQL_DATABASE: zabbix
+    MYSQL_USER: zabbix
+    MYSQL_PASSWORD: KD8cCgmKlcVU
+    TZ: America/Sao_Paulo
+    PHP_TZ: America/Sao_Paulo
+  networks:
+   - default
+   - zabbix_network
+  user: root
+  stop_grace_period: 30s
+  deploy:
+   update_config:
+    failure_action: rollback
+   replicas: 1
+   placement:
+    constraints:
+     - 'node.role == worker'
+  labels:
+   com.zabbix.description: "Zabbix server with MySQL database support"
+   com.zabbix.company: "Zabbix SIA"
+   com.zabbix.component: "zabbix-server"
+   com.zabbix.dbtype: "mysql"
+   com.zabbix.os: "alpine"
+
+ zabbix-agent:
+  image: zabbix/zabbix-agent:alpine-latest
+  hostname: zabbix-agent 
+  ports:
+   #- "10050:10050"
+   - target: 10050
+     published: 10060
+     protocol: tcp
+     mode: host
+  volumes:
+   - zabbix_agentd:/etc/zabbix/zabbix_agentd.d:ro
+   - zabbix_modules:/var/lib/zabbix/modules:ro
+   - zabbix_enc:/var/lib/zabbix/enc:ro
+   - zabbix_ssh_keys:/var/lib/zabbix/ssh_keys:ro
+  environment:
+    MYSQL_DATABASE: zabbix
+    MYSQL_USER: zabbix
+    MYSQL_PASSWORD: KD8cCgmKlcVU
+    TZ: America/Sao_Paulo
+    PHP_TZ: America/Sao_Paulo
+  user: root
+  #privileged: true
+  networks:
+   - zabbix_network
+   - default
+  deploy:
+   mode: global
+   placement:
+    constraints:
+      - 'node.role == worker'
+  #pid: "host"
+  stop_grace_period: 5s
+  
+
+  # para conectar nos hosts externos usando IP dos managers que tem 
+  # IPs fixos e estao publicados no DNS
+ zabbix-proxy:
+    # usar a mesma versao do zabbix-server
+    image: zabbix/zabbix-proxy-sqlite3:alpine-latest
+    environment:
+      - ZBX_HOSTNAME=zabbix-proxy
+      - TZ=America/Sao_Paulo
+      - ZBX_SERVER_HOST=tasks.zabbix-server
+      #- ZBX_PROXYMODE=1 # passivo
+      - ZBX_STARTPINGERS=2
+      - ZBX_TIMEOUT=20
+      - ZBX_DEBUGLEVEL=3
+    network_mode: host
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == ${NODE_HOSTNAME}
+      update_config:
+        parallelism: 1
+        delay: 10s
+
+networks:
+ web:
+    external: 
+      name: web
+
+ zabbix_network:
+  attachable: true
+  #external: true
+  internal: true
+  ipam:
+   driver: default
+   config:
+    - subnet: "10.11.1.0/24"
+
+volumes:
+ zabbix-mariadb-data:
+ zabbix-mariadb-entrypoint:
+ zabbix_enc:
+ zabbix_ssh_keys:
+ zabbix_modules: 
+ zabbix_agentd:
+ zabbix:
+ zabbix_nginx:
+ zabbix_mibs:
+ zabbix_externalscripts:
+ zabbix_alertscripts:
