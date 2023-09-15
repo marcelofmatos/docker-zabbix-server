@@ -190,8 +190,8 @@ services:
 
 networks:
  web:
-    external: 
-      name: web
+    external: true
+    name: web
 
  zabbix_network:
   attachable: true
@@ -214,3 +214,4 @@ volumes:
  zabbix_mibs:
  zabbix_externalscripts:
  zabbix_alertscripts:
+ zabbix_snmptraps:
