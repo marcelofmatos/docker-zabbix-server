@@ -1,6 +1,7 @@
 # https://github.com/joosequezada/Zabbix-Docker-Swarm
 # env:
 # NODE_HOSTNAME 
+# WEBSERVER_HOSTS
 
 version: "3.8"
 services:
@@ -29,7 +30,7 @@ services:
     replicas: 1
     placement:
       constraints:
-        - 'node.hostname == ligeroorg-worker-1'
+        - node.hostname == ${NODE_HOSTNAME}
 
  zabbix-web-nginx-mysql:
   image: zabbix/zabbix-web-nginx-mysql:alpine-latest
@@ -74,7 +75,7 @@ services:
    replicas: 2
    placement:
     constraints:
-     - 'node.role == worker'
+      - node.hostname == ${NODE_HOSTNAME}
    labels:
         - traefik.enable=true
         - traefik.port=8080
@@ -124,7 +125,7 @@ services:
    replicas: 1
    placement:
     constraints:
-     - 'node.role == worker'
+      - node.hostname == ${NODE_HOSTNAME}
   labels:
    com.zabbix.description: "Zabbix server with MySQL database support"
    com.zabbix.company: "Zabbix SIA"
@@ -159,9 +160,6 @@ services:
    - default
   deploy:
    mode: global
-   placement:
-    constraints:
-      - 'node.role == worker'
   #pid: "host"
   stop_grace_period: 5s
   
