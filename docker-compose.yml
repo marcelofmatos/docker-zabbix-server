@@ -103,7 +103,7 @@ services:
    - zabbix_enc:/var/lib/zabbix/enc:ro
    - zabbix_ssh_keys:/var/lib/zabbix/ssh_keys:ro
    - zabbix_mibs:/var/lib/zabbix/mibs:ro
-   - snmptraps:/var/lib/zabbix/snmptraps:ro
+   - zabbix_snmptraps:/var/lib/zabbix/snmptraps:ro
   environment:
     DB_SERVER_HOST: database
     MYSQL_DATABASE: zabbix
