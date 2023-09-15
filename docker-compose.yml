@@ -1,4 +1,6 @@
 # https://github.com/joosequezada/Zabbix-Docker-Swarm
+# env:
+# NODE_HOSTNAME 
 
 version: "3.8"
 services:
